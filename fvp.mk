@@ -1,4 +1,4 @@
-DEBUG ?= 1
+#DEBUG ?= 1
 
 ################################################################################
 # Following variables defines how the NS_USER (Non Secure User - Client
@@ -52,18 +52,32 @@ $(OUT_PATH):
 ARM_TF_EXPORTS ?= \
 	CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
 
+
+
+# Use these flags to load a paged OP-TEE, doesn't work at the moment
+#	BL32=$(OPTEE_OS_HEADER_V2_BIN) \
+#	BL32_EXTRA1=$(OPTEE_OS_PAGER_V2_BIN) \
+#	BL32_EXTRA2=$(OPTEE_OS_PAGEABLE_V2_BIN) \
+
+
 ARM_TF_FLAGS ?= \
-	BL32=$(OPTEE_OS_HEADER_V2_BIN) \
-	BL32_EXTRA1=$(OPTEE_OS_PAGER_V2_BIN) \
-	BL32_EXTRA2=$(OPTEE_OS_PAGEABLE_V2_BIN) \
+	BL32=$(OPTEE_OS_PAGER_V2_BIN) \
 	BL33=$(EDK2_BIN) \
-	DEBUG=0 \
+	DEBUG=1 V=1 \
 	ARM_TSP_RAM_LOCATION=tdram \
 	FVP_USE_GIC_DRIVER=FVP_GICV3 \
 	PLAT=fvp \
-	SPD=opteed
+	ARM_BL31_IN_DRAM=1 ENABLE_SPM=1 SPM_DEPRECATED=0 ENABLE_SPCI_ALPHA2=1
 
 arm-tf: optee-os edk2
+	(cd ../optee_os/core/arch/arm/plat-vexpress/ && \
+	     cat optee_rd.dts | \
+	     cpp -P -x c -I ./ -I ../../../../lib/libutils/ext/include/ - | \
+	     sed -n '/\/dts-v1\//,$$p' > optee_rd.dts.pre && \
+	 dtc -I dts -O dtb optee_rd.dts.pre > optee_rd.dtb)
+	dtc -I dtb -O dts \
+		../optee_os/core/arch/arm/plat-vexpress/optee_rd.dtb > \
+		../arm-trusted-firmware/plat/arm/board/fvp/fdts/fvp_optee_fw_config.dts
 	$(ARM_TF_EXPORTS) $(MAKE) -C $(ARM_TF_PATH) $(ARM_TF_FLAGS) all fip
 
 arm-tf-clean:
@@ -113,7 +127,8 @@ linux-cleaner: linux-cleaner-common
 ################################################################################
 # OP-TEE
 ################################################################################
-OPTEE_OS_COMMON_FLAGS += PLATFORM=vexpress-fvp CFG_ARM_GICV3=y
+OPTEE_OS_COMMON_FLAGS += PLATFORM=vexpress-fvp CFG_ARM_GICV3=y CFG_WITH_SPCI=1 \
+			CFG_ARM64_core=y
 optee-os: optee-os-common
 
 OPTEE_OS_CLEAN_COMMON_FLAGS += PLATFORM=vexpress-fvp
@@ -163,11 +178,11 @@ grub-clean:
 # Boot Image
 ################################################################################
 .PHONY: boot-img
-boot-img: linux grub buildroot
+boot-img: arm-tf linux grub buildroot
 	rm -f $(BOOT_IMG)
 	mformat -i $(BOOT_IMG) -n 64 -h 255 -T 131072 -v "BOOT IMG" -C ::
 	mcopy -i $(BOOT_IMG) $(LINUX_PATH)/arch/arm64/boot/Image ::
-	mcopy -i $(BOOT_IMG) $(LINUX_PATH)/arch/arm64/boot/dts/arm/foundation-v8-gicv3-psci.dtb ::
+	mcopy -i $(BOOT_IMG) $(ARM_TF_PATH)/build/fvp/debug/fdts/fvp-base-gicv3-psci.dtb ::
 	mmd -i $(BOOT_IMG) ::/EFI
 	mmd -i $(BOOT_IMG) ::/EFI/BOOT
 	mcopy -i $(BOOT_IMG) $(ROOT)/out-br/images/rootfs.cpio.gz ::/initrd.img
@@ -185,15 +200,19 @@ boot-img-clean:
 run: all
 	$(MAKE) run-only
 
+# If running with an attached debugger, uncomment the line below
+#FVP_DEBUGGER := --cadi-server --print-port-number
+
 run-only:
-	@cd $(FOUNDATION_PATH); \
+	cd $(FOUNDATION_PATH); \
 	$(FOUNDATION_PATH)/models/Linux64_GCC-4.9/Foundation_Platform \
 	--arm-v8.0 \
-	--cores=4 \
+	--cores=1 \
 	--secure-memory \
 	--visualization \
 	--gicv3 \
-	--data="$(ARM_TF_PATH)/build/fvp/release/bl1.bin"@0x0 \
-	--data="$(ARM_TF_PATH)/build/fvp/release/fip.bin"@0x8000000 \
+	$(FVP_DEBUGGER) \
+	--data="$(ARM_TF_PATH)/build/fvp/debug/bl1.bin"@0x0 \
+	--data="$(ARM_TF_PATH)/build/fvp/debug/fip.bin"@0x8000000 \
 	--block-device=$(BOOT_IMG)
 
