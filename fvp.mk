@@ -71,13 +71,7 @@ ARM_TF_FLAGS ?= \
 	ARM_BL31_IN_DRAM=1 ENABLE_SPM=1 SPM_DEPRECATED=0 ENABLE_SPCI_ALPHA2=1
 
 arm-tf: optee-os edk2
-	(cd ../optee_os/core/arch/arm/plat-vexpress/ && \
-	     cat optee_rd.dts | \
-	     cpp -P -x c -I ./ -I ../../../../lib/libutils/ext/include/ - | \
-	     sed -n '/\/dts-v1\//,$$p' > optee_rd.dts.pre && \
-	 dtc -I dts -O dtb optee_rd.dts.pre > optee_rd.dtb)
-	dtc -I dtb -O dts \
-		../optee_os/core/arch/arm/plat-vexpress/optee_rd.dtb > \
+	cp ../optee_os/out/arm/core/rd.dts \
 		../arm-trusted-firmware/plat/arm/board/fvp/fdts/fvp_optee_fw_config.dts
 	$(ARM_TF_EXPORTS) $(MAKE) -C $(ARM_TF_PATH) $(ARM_TF_FLAGS) all fip
 
