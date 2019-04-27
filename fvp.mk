@@ -122,7 +122,7 @@ linux-cleaner: linux-cleaner-common
 ################################################################################
 # OP-TEE
 ################################################################################
-OPTEE_OS_COMMON_FLAGS += PLATFORM=vexpress-fvp CFG_ARM_GICV3=y CFG_WITH_SPCI=1 \
+OPTEE_OS_COMMON_FLAGS += PLATFORM=vexpress-fvp CFG_ARM_GICV3=y CFG_WITH_SPCI=y \
 			CFG_ARM64_core=y
 optee-os: optee-os-common
 
