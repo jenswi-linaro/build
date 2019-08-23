@@ -377,11 +377,19 @@ $(ROOTFS_UGZ): u-boot buildroot | $(BINARIES_PATH)
 ################################################################################
 # XEN
 ################################################################################
+XEN_CONFIGS = .config $(ROOT)/build/kconfigs/xen.conf
+ifneq ($(filter 1 2 3,$(SPMC_AT_EL)),)
+XEN_CONFIGS += $(ROOT)/build/kconfigs/xen_ffa.conf
+XEN_FFA = $(XEN_BOOT)
+else
+XEN_FFA = n
+endif
+
 .PHONY: xen
 $(XEN_PATH)/xen/.config:
 	$(MAKE) -C $(XEN_PATH)/xen XEN_TARGET_ARCH=arm64 defconfig
 	cd $(XEN_PATH)/xen && \
-	tools/kconfig/merge_config.sh -m .config $(ROOT)/build/kconfigs/xen.conf
+	tools/kconfig/merge_config.sh -m $(XEN_CONFIGS)
 
 xen: $(XEN_PATH)/xen/.config
 	$(MAKE) -C $(XEN_PATH) dist-xen \
@@ -491,6 +499,7 @@ check: $(CHECK_DEPS)
 		export QEMU_MEM=$(QEMU_MEM) && \
 		export QEMU_CPU=$(QEMU_CPU) && \
 		export XEN_BOOT=$(XEN_BOOT) && \
+		export XEN_FFA=$(XEN_FFA) && \
 		expect $(ROOT)/build/qemu-check.exp -- $(check-args) || \
 		(if [ "$(DUMP_LOGS_ON_ERROR)" ]; then \
 			echo "== $$PWD/serial0.log:"; \
