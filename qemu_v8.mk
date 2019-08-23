@@ -72,9 +72,10 @@ TF_A_FLAGS ?= \
 	PLAT=qemu \
 	ARM_TSP_RAM_LOCATION=tdram \
 	BL32_RAM_LOCATION=tdram \
-	SPD=opteed \
 	DEBUG=$(TF_A_DEBUG) \
-	LOG_LEVEL=$(TF_A_LOGLVL)
+	LOG_LEVEL=$(TF_A_LOGLVL) \
+	V=1 \
+	ARM_BL31_IN_DRAM=1 ENABLE_SPMD=1 SPM_DEPRECATED=0
 
 ifeq ($(TF_A_TRUSTED_BOARD_BOOT),y)
 TF_A_FLAGS += \
@@ -83,7 +84,10 @@ TF_A_FLAGS += \
 	GENERATE_COT=1
 endif
 
-arm-tf: optee-os edk2
+arm-tf: optee-os #edk2
+	mkdir -p $(ARM_TF_OUT)/
+#	dtc -I dts -O dtb < ../optee_os/out/arm/core/rd.dts > \
+#		$(ARM_TF_OUT)/tos_fw_config.dtb
 	$(TF_A_EXPORTS) $(MAKE) -C $(TF_A_PATH) $(TF_A_FLAGS) all fip
 	mkdir -p $(BINARIES_PATH)
 	ln -sf $(TF_A_OUT)/bl1.bin $(BINARIES_PATH)
@@ -102,6 +106,8 @@ endif
 	ln -sf $(OPTEE_OS_HEADER_V2_BIN) $(BINARIES_PATH)/bl32.bin
 	ln -sf $(OPTEE_OS_PAGER_V2_BIN) $(BINARIES_PATH)/bl32_extra1.bin
 	ln -sf $(OPTEE_OS_PAGEABLE_V2_BIN) $(BINARIES_PATH)/bl32_extra2.bin
+	ln -sf $(TF_A_OUT)/fdts/qemu_spmc_manifest.dtb \
+		$(BINARIES_PATH)/tos_fw_config.dtb
 	ln -sf $(EDK2_BIN) $(BINARIES_PATH)/bl33.bin
 
 arm-tf-clean:
@@ -165,7 +171,12 @@ linux-cleaner: linux-cleaner-common
 ################################################################################
 # OP-TEE
 ################################################################################
-OPTEE_OS_COMMON_FLAGS += DEBUG=$(DEBUG)
+OPTEE_OS_COMMON_FLAGS += PLATFORM=vexpress-qemu_armv8a \
+			 DEBUG=$(DEBUG) CFG_CC_OPTIMIZE_FOR_SIZE=y \
+			 CFG_WERROR=y \
+			 CFG_CORE_SEL1_SPMC=y \
+			 CFG_WITH_PAGER=n
+
 optee-os: optee-os-common
 
 optee-os-clean: optee-os-clean-common
@@ -187,7 +198,7 @@ soc-term-clean:
 run: all
 	$(MAKE) run-only
 
-QEMU_SMP ?= 2
+QEMU_SMP ?= 1
 
 .PHONY: run-only
 run-only:
