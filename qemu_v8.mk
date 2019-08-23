@@ -22,7 +22,7 @@ EDK2_BIN		?= $(EDK2_PATH)/Build/ArmVirtQemuKernel-AARCH64/DEBUG_GCC49/FV/QEMU_EF
 QEMU_PATH		?= $(ROOT)/qemu
 SOC_TERM_PATH		?= $(ROOT)/soc_term
 
-DEBUG ?= 1
+#DEBUG ?= 1
 
 ################################################################################
 # Targets
@@ -39,12 +39,12 @@ include toolchain.mk
 ARM_TF_EXPORTS ?= \
 	CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
 
-ARM_TF_DEBUG ?= $(DEBUG)
+ARM_TF_DEBUG ?= 1
 ifeq ($(ARM_TF_DEBUG),0)
 ARM_TF_LOGLVL ?= 30
 ARM_TF_OUT = $(ARM_TF_PATH)/build/qemu/release
 else
-ARM_TF_LOGLVL ?= 50
+ARM_TF_LOGLVL ?= 40
 ARM_TF_OUT = $(ARM_TF_PATH)/build/qemu/debug
 endif
 
@@ -56,11 +56,15 @@ ARM_TF_FLAGS ?= \
 	PLAT=qemu \
 	ARM_TSP_RAM_LOCATION=tdram \
 	BL32_RAM_LOCATION=tdram \
-	SPD=opteed \
 	DEBUG=$(ARM_TF_DEBUG) \
-	LOG_LEVEL=$(ARM_TF_LOGLVL)
+	LOG_LEVEL=$(ARM_TF_LOGLVL) \
+	V=1 \
+	ARM_BL31_IN_DRAM=1 ENABLE_SPM=1 SPM_DEPRECATED=0 ENABLE_SPCI_ALPHA2=1
 
 arm-tf: optee-os edk2
+	mkdir -p $(ARM_TF_OUT)/
+	dtc -I dts -O dtb < ../optee_os/out/arm/core/rd.dts > \
+		$(ARM_TF_OUT)/tos_fw_config.dtb
 	$(ARM_TF_EXPORTS) $(MAKE) -C $(ARM_TF_PATH) $(ARM_TF_FLAGS) all fip
 	mkdir -p $(BINARIES_PATH)
 	ln -sf $(ARM_TF_OUT)/bl1.bin $(BINARIES_PATH)
@@ -69,6 +73,7 @@ arm-tf: optee-os edk2
 	ln -sf $(OPTEE_OS_HEADER_V2_BIN) $(BINARIES_PATH)/bl32.bin
 	ln -sf $(OPTEE_OS_PAGER_V2_BIN) $(BINARIES_PATH)/bl32_extra1.bin
 	ln -sf $(OPTEE_OS_PAGEABLE_V2_BIN) $(BINARIES_PATH)/bl32_extra2.bin
+	ln -sf $(ARM_TF_OUT)/tos_fw_config.dtb $(BINARIES_PATH)
 	ln -sf $(EDK2_BIN) $(BINARIES_PATH)/bl33.bin
 
 arm-tf-clean:
@@ -133,7 +138,8 @@ linux-cleaner: linux-cleaner-common
 # OP-TEE
 ################################################################################
 OPTEE_OS_COMMON_FLAGS += PLATFORM=vexpress-qemu_armv8a CFG_ARM64_core=y \
-			 DEBUG=$(DEBUG)
+			 DEBUG=$(DEBUG) \
+			 CFG_WITH_SPCI=y CFG_CC_OPTIMIZE_FOR_SIZE=n
 optee-os: optee-os-common
 
 OPTEE_OS_CLEAN_COMMON_FLAGS += PLATFORM=vexpress-qemu_armv8a
@@ -156,7 +162,7 @@ soc-term-clean:
 run: all
 	$(MAKE) run-only
 
-QEMU_SMP ?= 2
+QEMU_SMP ?= 1
 
 .PHONY: run-only
 run-only:
