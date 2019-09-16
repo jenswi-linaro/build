@@ -20,7 +20,9 @@ OPTEE_EXAMPLES_PATH		?= $(ROOT)/optee_examples
 BENCHMARK_APP_PATH		?= $(ROOT)/optee_benchmark
 BENCHMARK_APP_OUT		?= $(BENCHMARK_APP_PATH)/out
 LIBYAML_LIB_OUT			?= $(BENCHMARK_APP_OUT)/libyaml/out/lib
-BUILDROOT_TARGET_ROOT		?= $(ROOT)/out-br/target
+BUILDROOT_TARGET_ROOT	?= $(ROOT)/out-br/target
+UEFI_TOOLS_PATH			?= $(ROOT)/uefi-tools
+EDK2_PLAT_PATH			?= $(ROOT)/edk2-platforms
 
 # default high verbosity. slow uarts shall specify lower if prefered
 CFG_TEE_CORE_LOG_LEVEL		?= 3
@@ -291,6 +293,10 @@ linux-cleaner-common: linux-defconfig-clean
 edk2-common:
 	$(call edk2-env) && \
 	export PACKAGES_PATH=$(EDK2_PATH):$(EDK2_PLATFORMS_PATH) && \
+	cd $(EDK2_PATH) && \
+	git submodule init && \
+	git submodule update &&\
+	cd - && \
 	source $(EDK2_PATH)/edksetup.sh && \
 	$(MAKE) -j1 -C $(EDK2_PATH)/BaseTools && \
 	$(call edk2-call) all
