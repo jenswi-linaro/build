@@ -26,6 +26,8 @@ EDK2_PATH		?= $(ROOT)/edk2
 EDK2_BIN		?= $(EDK2_PATH)/Build/ArmVirtQemuKernel-AARCH64/DEBUG_GCC49/FV/QEMU_EFI.fd
 QEMU_PATH		?= $(ROOT)/qemu
 SOC_TERM_PATH		?= $(ROOT)/soc_term
+U-BOOT_PATH		?= $(ROOT)/u-boot
+U-BOOT_BIN		?= $(U-BOOT_PATH)/u-boot.bin
 
 DEBUG ?= 1
 
@@ -73,7 +75,7 @@ TF_A_FLAGS += \
 	GENERATE_COT=1
 endif
 
-arm-tf: optee-os edk2
+arm-tf: optee-os u-boot edk2
 	$(TF_A_EXPORTS) $(MAKE) -C $(TF_A_PATH) $(TF_A_FLAGS) all fip
 	mkdir -p $(BINARIES_PATH)
 	ln -sf $(TF_A_OUT)/bl1.bin $(BINARIES_PATH)
@@ -92,7 +94,8 @@ endif
 	ln -sf $(OPTEE_OS_HEADER_V2_BIN) $(BINARIES_PATH)/bl32.bin
 	ln -sf $(OPTEE_OS_PAGER_V2_BIN) $(BINARIES_PATH)/bl32_extra1.bin
 	ln -sf $(OPTEE_OS_PAGEABLE_V2_BIN) $(BINARIES_PATH)/bl32_extra2.bin
-	ln -sf $(EDK2_BIN) $(BINARIES_PATH)/bl33.bin
+	#ln -sf $(EDK2_BIN) $(BINARIES_PATH)/bl33.bin
+	ln -sf $(U-BOOT_BIN) $(BINARIES_PATH)/bl33.bin
 
 arm-tf-clean:
 	$(TF_A_EXPORTS) $(MAKE) -C $(TF_A_PATH) $(TF_A_FLAGS) clean
@@ -137,6 +140,26 @@ stmm: edk2
 		-b DEBUG qemu_virt_standalone
 
 ################################################################################
+# Das U-Boot
+################################################################################
+
+U-BOOT_EXPORTS ?= CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
+
+U-BOOT_DEFCONFIG_FILES := \
+	$(U-BOOT_PATH)/configs/qemu_arm64_defconfig \
+	$(ROOT)/build/kconfigs/u-boot_qemu_virt_v8.conf
+
+.PHONY: u-boot
+u-boot:
+	cd $(U-BOOT_PATH) && \
+		scripts/kconfig/merge_config.sh $(U-BOOT_DEFCONFIG_FILES)
+	$(U-BOOT_EXPORTS) $(MAKE) -C $(U-BOOT_PATH) all
+
+u-boot-clean:
+	$(U-BOOT_EXPORTS) $(MAKE) -C $(U-BOOT_PATH) clean
+
+
+################################################################################
 # Linux kernel
 ################################################################################
 LINUX_DEFCONFIG_COMMON_ARCH := arm64
@@ -167,6 +190,10 @@ linux-cleaner: linux-cleaner-common
 ################################################################################
 OPTEE_OS_COMMON_FLAGS += PLATFORM=vexpress-qemu_armv8a CFG_ARM64_core=y \
 			 DEBUG=$(DEBUG)
+
+OPTEE_OS_COMMON_FLAGS += CFG_CC_OPTIMIZE_FOR_SIZE=n
+OPTEE_OS_COMMON_FLAGS += CFG_STMM_PATH=/home/jens/work/repos/qemu_stmm/uefi-tools/Build/QemuVirtMmStandalone/DEBUG_GCC5/FV/BL32_AP_MM.fd
+
 optee-os: optee-os-common
 
 OPTEE_OS_CLEAN_COMMON_FLAGS += PLATFORM=vexpress-qemu_armv8a
@@ -189,7 +216,7 @@ soc-term-clean:
 run: all
 	$(MAKE) run-only
 
-QEMU_SMP ?= 2
+QEMU_SMP ?= 1
 
 .PHONY: run-only
 run-only:
@@ -205,7 +232,7 @@ run-only:
 		-smp $(QEMU_SMP) \
 		-s -S -machine virt,secure=on -cpu cortex-a57 \
 		-d unimp -semihosting-config enable,target=native \
-		-m 1057 \
+		-m 3072 \
 		-bios bl1.bin \
 		-initrd rootfs.cpio.gz \
 		-kernel Image -no-acpi \
