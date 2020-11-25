@@ -12,6 +12,7 @@ OPTEE_OS_PLATFORM = vexpress-fvp
 
 include common.mk
 
+DEBUG=1
 
 ################################################################################
 # Paths to git projects and various binaries
@@ -22,6 +23,7 @@ TF_A_BUILD		?= debug
 else
 TF_A_BUILD		?= release
 endif
+HAFNIUM_PATH		?= $(ROOT)/hafnium
 EDK2_PATH		?= $(ROOT)/edk2
 EDK2_PLATFORMS_PATH	?= $(ROOT)/edk2-platforms
 EDK2_TOOLCHAIN		?= GCC49
@@ -32,10 +34,6 @@ else
 EDK2_BUILD		?= RELEASE
 endif
 EDK2_BIN		?= $(EDK2_PLATFORMS_PATH)/Build/ArmVExpress-FVP-AArch64/$(EDK2_BUILD)_$(EDK2_TOOLCHAIN)/FV/FVP_$(EDK2_ARCH)_EFI.fd
-FOUNDATION_PATH		?= $(ROOT)/Foundation_Platformpkg
-ifeq ($(wildcard $(FOUNDATION_PATH)),)
-$(error $(FOUNDATION_PATH) does not exist)
-endif
 GRUB_PATH		?= $(ROOT)/grub
 GRUB_CONFIG_PATH	?= $(BUILD_PATH)/fvp/grub
 OUT_PATH		?= $(ROOT)/out
@@ -45,7 +43,7 @@ BOOT_IMG		?= $(OUT_PATH)/boot-fat.uefi.img
 ################################################################################
 # Targets
 ################################################################################
-all: arm-tf boot-img edk2 grub linux optee-os
+all: arm-tf boot-img edk2 grub linux optee-os hafnium
 clean: arm-tf-clean boot-img-clean buildroot-clean edk2-clean grub-clean \
 	optee-os-clean
 
@@ -65,21 +63,80 @@ TF_A_EXPORTS ?= \
 	CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
 
 TF_A_FLAGS ?= \
-	BL32=$(OPTEE_OS_HEADER_V2_BIN) \
-	BL32_EXTRA1=$(OPTEE_OS_PAGER_V2_BIN) \
-	BL32_EXTRA2=$(OPTEE_OS_PAGEABLE_V2_BIN) \
-	BL33=$(EDK2_BIN) \
-	DEBUG=$(DEBUG) \
-	ARM_TSP_RAM_LOCATION=tdram \
-	FVP_USE_GIC_DRIVER=FVP_GICV3 \
+	SPD=spmd \
+	CTX_INCLUDE_EL2_REGS=1 \
+	SPMD_SPM_AT_SEL2=1 \
 	PLAT=fvp \
-	SPD=opteed
+	BL33=$(OUT_PATH)/hafnium.bin \
+	DEBUG=$(DEBUG) \
+	BL32=$(OUT_PATH)/secure_hafnium.bin \
+	ARM_ARCH_MINOR=4 \
+	FVP_NT_FW_CONFIG=$(OUT_PATH)/normal_world.dtb \
+	SP_LAYOUT_FILE=sp_layout.json
 
-arm-tf: optee-os edk2
+arm-tf: optee-os hafnium
 	$(TF_A_EXPORTS) $(MAKE) -C $(TF_A_PATH) $(TF_A_FLAGS) all fip
 
 arm-tf-clean:
 	$(TF_A_EXPORTS) $(MAKE) -C $(TF_A_PATH) $(TF_A_FLAGS) clean
+
+################################################################################
+# Hafnium
+################################################################################
+
+HAFNIUM_EXPORTS ?= \
+	CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
+
+HAFNIUM_FLAGS ?=
+
+HAFNIUM_PROJECT_REFERENCE ?= \
+	https://git.trustedfirmware.org/hafnium/project/reference.git
+
+$(HAFNIUM_PATH)/.init_stuff:
+	(cd $(HAFNIUM_PATH)/project && rm -rf reference && \
+	 git clone $(HAFNIUM_PROJECT_REFERENCE) && \
+	 cd reference && git checkout origin/ffa_rel_proto)
+	(cd $(HAFNIUM_PATH) && git submodule update --init prebuilts)
+	(cd $(HAFNIUM_PATH) && git submodule update --init third_party/linux)
+	(cd $(HAFNIUM_PATH) && git submodule update --init third_party/dtc)
+	(cd $(HAFNIUM_PATH) && git submodule update --init third_party/googletest)
+	touch $(HAFNIUM_PATH)/.init_stuff
+
+hafnium_base: $(HAFNIUM_PATH)/.init_stuff | $(OUT_PATH)
+	$(HAFNIUM_EXPORTS) $(MAKE) -C $(HAFNIUM_PATH) $(HAFNIUM_FLAGS) all
+	cp $(HAFNIUM_PATH)/out/reference/aem_v8a_fvp_clang/hafnium.bin \
+		$(OUT_PATH)/hafnium.bin
+	cp $(HAFNIUM_PATH)/out/reference/secure_aem_v8a_fvp_clang/hafnium.bin \
+		$(OUT_PATH)/secure_hafnium.bin
+
+hafnium: hafnium_base hafnium_ramdisk hafnium_secure_ramdisk
+
+hafnium_ramdisk $(OUT_PATH)/normal_world.dtb $(OUT_PATH)/initrd.img: buildroot linux | $(OUT_PATH)
+	mkdir -p $(OUT_PATH)/initrd
+	dtc -O dtb -o $(OUT_PATH)/initrd/manifest.dtb \
+		$(TF_A_PATH)/fdts/inner_initrd.dts
+	# TODO Link and --dereference
+	cp ${ROOT}/out-br/images/rootfs.cpio.gz $(OUT_PATH)/initrd/initrd.img
+	cp $(LINUX_PATH)/arch/arm64/boot/Image $(OUT_PATH)/initrd/vmlinuz
+	(cd $(OUT_PATH)/initrd && \
+	 printf "manifest.dtb\ninitrd.img\nvmlinuz" | cpio -o > ../initrd.img)
+	cp $(TF_A_PATH)/fdts/normal_world_single.dts \
+		$(OUT_PATH)/normal_world.dts
+	sh $(ROOT)/build/fvp/print_dts_epilogue.sh 0x84000000 \
+		`stat -c%s "$(OUT_PATH)/initrd.img"` >> \
+		$(OUT_PATH)/normal_world.dts
+	dtc -O dtb -o $(OUT_PATH)/normal_world.dtb $(OUT_PATH)/normal_world.dts
+
+hafnium_secure_ramdisk $(OUT_PATH)/secure_initrd.img: optee-os hafnium_base
+	mkdir -p $(OUT_PATH)/secure_initrd
+	dtc -O dtb -o $(OUT_PATH)/secure_initrd/manifest.dtb \
+		$(TF_A_PATH)/fdts/secure_world_dt.dts
+	touch $(OUT_PATH)/secure_initrd/initrd.img
+	cp $(HAFNIUM_PATH)/out/reference/secure_aem_v8a_fvp_vm_clang/obj/test/secure_world_baremetal/secure_world_sp.bin $(OUT_PATH)/secure_initrd/bare_metal_sp
+	cp ${OPTEE_OS_PAGER_V2_BIN} $(OUT_PATH)/secure_initrd/optee
+	(cd $(OUT_PATH)/secure_initrd && \
+	 printf "manifest.dtb\ninitrd.img\noptee\nbare_metal_sp" | \
+	 cpio -o > ../secure_initrd.img)
 
 ################################################################################
 # EDK2 / Tianocore
@@ -125,7 +182,11 @@ linux-cleaner: linux-cleaner-common
 ################################################################################
 # OP-TEE
 ################################################################################
-OPTEE_OS_COMMON_FLAGS += CFG_ARM_GICV3=y
+OPTEE_OS_COMMON_FLAGS += CFG_ARM_GICV3=y 
+OPTEE_OS_COMMON_FLAGS += CFG_TEE_CORE_LOG_LEVEL=3 DEBUG=1 CFG_TEE_BENCHMARK=n
+OPTEE_OS_COMMON_FLAGS += CFG_CORE_BGET_BESTFIT=y
+OPTEE_OS_COMMON_FLAGS += CFG_CORE_SEL2_SPMC=y
+#OPTEE_OS_COMMON_FLAGS += CFG_CORE_SEL1_SPMC=y
 optee-os: optee-os-common
 
 optee-os-clean: optee-os-clean-common
@@ -197,14 +258,28 @@ run: all
 	$(MAKE) run-only
 
 run-only:
-	@cd $(FOUNDATION_PATH); \
-	$(FOUNDATION_PATH)/models/Linux64_GCC-6.4/Foundation_Platform \
-	--arm-v8.0 \
-	--cores=4 \
-	--secure-memory \
-	--visualization \
-	--gicv3 \
-	--data="$(TF_A_PATH)/build/fvp/$(TF_A_BUILD)/bl1.bin"@0x0 \
-	--data="$(TF_A_PATH)/build/fvp/$(TF_A_BUILD)/fip.bin"@0x8000000 \
-	--block-device=$(BOOT_IMG)
-
+	env PATH=/home/jens/work/tee_fvp/fake_xterm:$(PATH) \
+	$(ROOT)/model/Base_RevC_AEMv8A_pkg/models/Linux64_GCC-6.4//FVP_Base_RevC-2xAEMv8A \
+	-C pctl.startup=0.0.0.0 \
+	-C bp.secure_memory=0 \
+	-C cluster0.NUM_CORES=4 \
+	-C cluster1.NUM_CORES=4 \
+	-C cache_state_modelled=0 \
+	-C bp.pl011_uart0.untimed_fifos=1 \
+	-C bp.pl011_uart0.unbuffered_output=1 \
+	-C bp.pl011_uart1.untimed_fifos=1 \
+	-C bp.pl011_uart1.unbuffered_output=1 \
+	-C bp.pl011_uart0.out_file=$(OUT_PATH)/uart0.log \
+	-C bp.pl011_uart1.out_file=$(OUT_PATH)/uart1.log \
+	-C bp.terminal_0.start_telnet=1 \
+	-C bp.terminal_1.start_telnet=1 \
+	-C bp.vis.disable_visualisation=0 \
+	-C bp.secureflashloader.fname=$(TF_A_PATH)/build/fvp/$(TF_A_BUILD)/bl1.bin \
+	-C bp.flashloader0.fname=$(TF_A_PATH)/build/fvp/$(TF_A_BUILD)/fip.bin \
+	-C bp.ve_sysregs.mmbSiteDefault=0 \
+	-C bp.ve_sysregs.exit_on_shutdown=1 \
+	-C cluster0.has_arm_v8-4=1 \
+	-C cluster1.has_arm_v8-4=1 \
+	--data cluster0.cpu0=$(OUT_PATH)/normal_world.dtb@0x80000000 \
+	--data cluster0.cpu0=$(OUT_PATH)/initrd.img@0x84000000 \
+	--data cluster0.cpu0=$(OUT_PATH)/secure_initrd.img@0xA000000
