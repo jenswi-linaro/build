@@ -39,11 +39,12 @@ GRUB_CONFIG_PATH	?= $(BUILD_PATH)/fvp/grub
 OUT_PATH		?= $(ROOT)/out
 GRUB_BIN		?= $(OUT_PATH)/bootaa64.efi
 BOOT_IMG		?= $(OUT_PATH)/boot-fat.uefi.img
+SPMC_MANIFEST_FILE	?= $(TF_A_PATH)/plat/arm/board/fvp/fdts/fvp_spmc_optee_sp_manifest.dts
 
 ################################################################################
 # Targets
 ################################################################################
-all: arm-tf boot-img edk2 grub linux optee-os hafnium
+all: edk2 arm-tf boot-img grub linux optee-os hafnium
 clean: arm-tf-clean boot-img-clean buildroot-clean edk2-clean grub-clean \
 	optee-os-clean
 
@@ -67,14 +68,14 @@ TF_A_FLAGS ?= \
 	CTX_INCLUDE_EL2_REGS=1 \
 	SPMD_SPM_AT_SEL2=1 \
 	PLAT=fvp \
-	BL33=$(OUT_PATH)/hafnium.bin \
+	BL33=$(EDK2_BIN) \
 	DEBUG=$(DEBUG) \
-	BL32=$(OUT_PATH)/secure_hafnium.bin \
+	BL32=$(HAFNIUM_PATH)/out/reference/secure_aem_v8a_fvp_clang/hafnium.bin \
 	ARM_ARCH_MINOR=4 \
-	FVP_NT_FW_CONFIG=$(OUT_PATH)/normal_world.dtb \
-	SP_LAYOUT_FILE=sp_layout.json
+	SP_LAYOUT_FILE=$(TF_A_PATH)/sp_layout.json \
+	ARM_SPMC_MANIFEST_DTS=$(SPMC_MANIFEST_FILE)
 
-arm-tf: optee-os hafnium
+arm-tf: edk2 optee-os hafnium
 	$(TF_A_EXPORTS) $(MAKE) -C $(TF_A_PATH) $(TF_A_FLAGS) all fip
 
 arm-tf-clean:
@@ -93,13 +94,7 @@ HAFNIUM_PROJECT_REFERENCE ?= \
 	https://git.trustedfirmware.org/hafnium/project/reference.git
 
 $(HAFNIUM_PATH)/.init_stuff:
-	(cd $(HAFNIUM_PATH)/project && rm -rf reference && \
-	 git clone $(HAFNIUM_PROJECT_REFERENCE) && \
-	 cd reference && git checkout origin/ffa_rel_proto)
-	(cd $(HAFNIUM_PATH) && git submodule update --init prebuilts)
-	(cd $(HAFNIUM_PATH) && git submodule update --init third_party/linux)
-	(cd $(HAFNIUM_PATH) && git submodule update --init third_party/dtc)
-	(cd $(HAFNIUM_PATH) && git submodule update --init third_party/googletest)
+	(cd $(HAFNIUM_PATH) && git submodule update --init --recursive)
 	touch $(HAFNIUM_PATH)/.init_stuff
 
 hafnium_base: $(HAFNIUM_PATH)/.init_stuff | $(OUT_PATH)
@@ -109,8 +104,9 @@ hafnium_base: $(HAFNIUM_PATH)/.init_stuff | $(OUT_PATH)
 	cp $(HAFNIUM_PATH)/out/reference/secure_aem_v8a_fvp_clang/hafnium.bin \
 		$(OUT_PATH)/secure_hafnium.bin
 
-hafnium: hafnium_base hafnium_ramdisk hafnium_secure_ramdisk
+hafnium: hafnium_base #hafnium_ramdisk
 
+# Not currently using Hafnium in normal world.
 hafnium_ramdisk $(OUT_PATH)/normal_world.dtb $(OUT_PATH)/initrd.img: buildroot linux | $(OUT_PATH)
 	mkdir -p $(OUT_PATH)/initrd
 	dtc -O dtb -o $(OUT_PATH)/initrd/manifest.dtb \
@@ -126,17 +122,6 @@ hafnium_ramdisk $(OUT_PATH)/normal_world.dtb $(OUT_PATH)/initrd.img: buildroot l
 		`stat -c%s "$(OUT_PATH)/initrd.img"` >> \
 		$(OUT_PATH)/normal_world.dts
 	dtc -O dtb -o $(OUT_PATH)/normal_world.dtb $(OUT_PATH)/normal_world.dts
-
-hafnium_secure_ramdisk $(OUT_PATH)/secure_initrd.img: optee-os hafnium_base
-	mkdir -p $(OUT_PATH)/secure_initrd
-	dtc -O dtb -o $(OUT_PATH)/secure_initrd/manifest.dtb \
-		$(TF_A_PATH)/fdts/secure_world_dt.dts
-	touch $(OUT_PATH)/secure_initrd/initrd.img
-	cp $(HAFNIUM_PATH)/out/reference/secure_aem_v8a_fvp_vm_clang/obj/test/secure_world_baremetal/secure_world_sp.bin $(OUT_PATH)/secure_initrd/bare_metal_sp
-	cp ${OPTEE_OS_PAGER_V2_BIN} $(OUT_PATH)/secure_initrd/optee
-	(cd $(OUT_PATH)/secure_initrd && \
-	 printf "manifest.dtb\ninitrd.img\noptee\nbare_metal_sp" | \
-	 cpio -o > ../secure_initrd.img)
 
 ################################################################################
 # EDK2 / Tianocore
@@ -182,7 +167,7 @@ linux-cleaner: linux-cleaner-common
 ################################################################################
 # OP-TEE
 ################################################################################
-OPTEE_OS_COMMON_FLAGS += CFG_ARM_GICV3=y 
+OPTEE_OS_COMMON_FLAGS += CFG_ARM_GICV3=y
 OPTEE_OS_COMMON_FLAGS += CFG_TEE_CORE_LOG_LEVEL=3 DEBUG=1 CFG_TEE_BENCHMARK=n
 OPTEE_OS_COMMON_FLAGS += CFG_CORE_BGET_BESTFIT=y
 OPTEE_OS_COMMON_FLAGS += CFG_CORE_SEL2_SPMC=y
@@ -235,11 +220,11 @@ grub-clean:
 # Boot Image
 ################################################################################
 .PHONY: boot-img
-boot-img: linux grub buildroot
+boot-img: linux grub buildroot arm-tf
 	rm -f $(BOOT_IMG)
 	mformat -i $(BOOT_IMG) -n 64 -h 255 -T 131072 -v "BOOT IMG" -C ::
 	mcopy -i $(BOOT_IMG) $(LINUX_PATH)/arch/arm64/boot/Image ::
-	mcopy -i $(BOOT_IMG) $(LINUX_PATH)/arch/arm64/boot/dts/arm/foundation-v8-gicv3-psci.dtb ::
+	mcopy -i $(BOOT_IMG) $(TF_A_PATH)/build/fvp/$(TF_A_BUILD)/fdts/fvp-base-gicv3-psci.dtb ::
 	mmd -i $(BOOT_IMG) ::/EFI
 	mmd -i $(BOOT_IMG) ::/EFI/BOOT
 	mcopy -i $(BOOT_IMG) $(ROOT)/out-br/images/rootfs.cpio.gz ::/initrd.img
@@ -280,6 +265,4 @@ run-only:
 	-C bp.ve_sysregs.exit_on_shutdown=1 \
 	-C cluster0.has_arm_v8-4=1 \
 	-C cluster1.has_arm_v8-4=1 \
-	--data cluster0.cpu0=$(OUT_PATH)/normal_world.dtb@0x80000000 \
-	--data cluster0.cpu0=$(OUT_PATH)/initrd.img@0x84000000 \
-	--data cluster0.cpu0=$(OUT_PATH)/secure_initrd.img@0xA000000
+	-C bp.virtioblockdevice.image_path=$(BOOT_IMG)
