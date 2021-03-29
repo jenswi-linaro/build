@@ -243,7 +243,6 @@ run: all
 	$(MAKE) run-only
 
 run-only:
-	env PATH=/home/jens/work/tee_fvp/fake_xterm:$(PATH) \
 	$(ROOT)/model/Base_RevC_AEMv8A_pkg/models/Linux64_GCC-6.4//FVP_Base_RevC-2xAEMv8A \
 	-C pctl.startup=0.0.0.0 \
 	-C bp.secure_memory=0 \
