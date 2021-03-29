@@ -73,7 +73,8 @@ TF_A_FLAGS ?= \
 	BL32=$(HAFNIUM_PATH)/out/reference/secure_aem_v8a_fvp_clang/hafnium.bin \
 	ARM_ARCH_MINOR=4 \
 	SP_LAYOUT_FILE=$(TF_A_PATH)/sp_layout.json \
-	ARM_SPMC_MANIFEST_DTS=$(SPMC_MANIFEST_FILE)
+	ARM_SPMC_MANIFEST_DTS=$(SPMC_MANIFEST_FILE) \
+	FVP_DT_PREFIX=fvp-base-gicv3-psci-1t
 
 arm-tf: edk2 optee-os hafnium
 	$(TF_A_EXPORTS) $(MAKE) -C $(TF_A_PATH) $(TF_A_FLAGS) all fip
@@ -224,7 +225,7 @@ boot-img: linux grub buildroot arm-tf
 	rm -f $(BOOT_IMG)
 	mformat -i $(BOOT_IMG) -n 64 -h 255 -T 131072 -v "BOOT IMG" -C ::
 	mcopy -i $(BOOT_IMG) $(LINUX_PATH)/arch/arm64/boot/Image ::
-	mcopy -i $(BOOT_IMG) $(TF_A_PATH)/build/fvp/$(TF_A_BUILD)/fdts/fvp-base-gicv3-psci.dtb ::
+	mcopy -i $(BOOT_IMG) $(TF_A_PATH)/build/fvp/$(TF_A_BUILD)/fdts/fvp-base-gicv3-psci-1t.dtb ::
 	mmd -i $(BOOT_IMG) ::/EFI
 	mmd -i $(BOOT_IMG) ::/EFI/BOOT
 	mcopy -i $(BOOT_IMG) $(ROOT)/out-br/images/rootfs.cpio.gz ::/initrd.img
