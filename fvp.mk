@@ -245,7 +245,6 @@ run: all
 run-only:
 	$(ROOT)/model/Base_RevC_AEMv8A_pkg/models/Linux64_GCC-6.4//FVP_Base_RevC-2xAEMv8A \
 	-C pctl.startup=0.0.0.0 \
-	-C bp.secure_memory=0 \
 	-C cluster0.NUM_CORES=4 \
 	-C cluster1.NUM_CORES=4 \
 	-C cache_state_modelled=0 \
