@@ -29,6 +29,7 @@ DEBUG ?= 1
 TF_A_PATH		?= $(ROOT)/trusted-firmware-a
 BINARIES_PATH		?= $(ROOT)/out/bin
 EDK2_PATH		?= $(ROOT)/edk2
+EDK2_PLATFORMS_PATH	?= $(ROOT)/edk2-platforms
 EDK2_TOOLCHAIN		?= GCC5
 EDK2_ARCH		?= AARCH64
 ifeq ($(DEBUG),1)
@@ -41,7 +42,9 @@ QEMU_PATH		?= $(ROOT)/qemu
 QEMU_BUILD		?= $(QEMU_PATH)/build
 SOC_TERM_PATH		?= $(ROOT)/soc_term
 MODULE_OUTPUT		?= $(ROOT)/out/kernel_modules
+U-BOOT_PATH		?= $(ROOT)/u-boot
 
+U-BOOT_EFI_VARS		?= n
 
 ################################################################################
 # Targets
@@ -67,11 +70,18 @@ TF_A_LOGLVL ?= 50
 TF_A_OUT = $(TF_A_PATH)/build/qemu/debug
 endif
 
+
+ifeq ($(U-BOOT_EFI_VARS),y)
+TF_A_BL33=$(ROOT)/u-boot/u-boot.bin
+else
+TF_A_BL33=$(EDK2_BIN)
+endif
+
 TF_A_FLAGS ?= \
 	BL32=$(OPTEE_OS_HEADER_V2_BIN) \
 	BL32_EXTRA1=$(OPTEE_OS_PAGER_V2_BIN) \
 	BL32_EXTRA2=$(OPTEE_OS_PAGEABLE_V2_BIN) \
-	BL33=$(EDK2_BIN) \
+	BL33=$(TF_A_BL33) \
 	PLAT=qemu \
 	ARM_TSP_RAM_LOCATION=tdram \
 	BL32_RAM_LOCATION=tdram \
@@ -105,7 +115,11 @@ endif
 	ln -sf $(OPTEE_OS_HEADER_V2_BIN) $(BINARIES_PATH)/bl32.bin
 	ln -sf $(OPTEE_OS_PAGER_V2_BIN) $(BINARIES_PATH)/bl32_extra1.bin
 	ln -sf $(OPTEE_OS_PAGEABLE_V2_BIN) $(BINARIES_PATH)/bl32_extra2.bin
+ifeq ($(U-BOOT_EFI_VARS),y)
+	ln -sf $(ROOT)/u-boot/u-boot.bin $(BINARIES_PATH)/bl33.bin
+else
 	ln -sf $(EDK2_BIN) $(BINARIES_PATH)/bl33.bin
+endif
 
 arm-tf-clean:
 	$(TF_A_EXPORTS) $(MAKE) -C $(TF_A_PATH) $(TF_A_FLAGS) clean
@@ -127,19 +141,49 @@ qemu-clean:
 # EDK2 / Tianocore
 ################################################################################
 define edk2-env
-	export WORKSPACE=$(EDK2_PATH) PYTHON3_ENABLE=TRUE
+	export WORKSPACE=$(ROOT) PYTHON3_ENABLE=TRUE
 endef
+
+ifeq ($(U-BOOT_EFI_VARS),y)
+EDK2_PLATFORM = Platform/StandaloneMm/PlatformStandaloneMmPkg/PlatformStandaloneMmRpmb.dsc
+EDK2_STMM_PATH=$(ROOT)/Build/MmStandaloneRpmb/$(EDK2_BUILD)_$(EDK2_TOOLCHAIN)/FV/BL32_AP_MM.fd
+else
+EDK2_PLATFORM = ArmVirtPkg/ArmVirtQemuKernel.dsc
+endif
 
 define edk2-call
         $(EDK2_TOOLCHAIN)_$(EDK2_ARCH)_PREFIX=$(AARCH64_CROSS_COMPILE) \
         build -n `getconf _NPROCESSORS_ONLN` -a $(EDK2_ARCH) \
-                -t $(EDK2_TOOLCHAIN) -p ArmVirtPkg/ArmVirtQemuKernel.dsc \
+                -t $(EDK2_TOOLCHAIN) -p $(EDK2_PLATFORM) \
 		-b $(EDK2_BUILD)
 endef
 
 edk2: edk2-common
 
 edk2-clean: edk2-clean-common
+
+ifeq ($(U-BOOT_EFI_VARS),y)
+################################################################################
+# U-boot
+################################################################################
+
+U-BOOT_EXPORTS ?= CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
+
+all: u-boot
+.PHONY: u-boot
+u-boot:
+	$(U-BOOT_EXPORTS) $(MAKE) -C $(U-BOOT_PATH) qemu_tfa_mm_defconfig
+	$(U-BOOT_EXPORTS) $(MAKE) -C $(U-BOOT_PATH) all
+
+clean: u-boot-clean
+.PHONY: u-boot-clean
+u-boot-clean:
+	$(U-BOOT_EXPORTS) $(MAKE) -C $(U-BOOT_PATH) clean
+
+.PHONY: u-boot-cscope
+u-boot-cscope:
+	$(U-BOOT_EXPORTS) $(MAKE) -C $(U-BOOT_PATH) cscope
+endif
 
 ################################################################################
 # Linux kernel
@@ -176,6 +220,16 @@ linux-cleaner: linux-cleaner-common
 # OP-TEE
 ################################################################################
 OPTEE_OS_COMMON_FLAGS += DEBUG=$(DEBUG)
+
+ifeq ($(U-BOOT_EFI_VARS),y)
+OPTEE_OS_COMMON_FLAGS += CFG_STMM_PATH=$(EDK2_STMM_PATH)
+OPTEE_OS_COMMON_FLAGS += CFG_RPMB_FS=y
+OPTEE_OS_COMMON_FLAGS += CFG_RPMB_WRITE_KEY=y
+OPTEE_OS_COMMON_FLAGS += CFG_RPMB_TESTKEY=y
+OPTEE_OS_COMMON_FLAGS += CFG_REE_FS=n
+optee-os-common: edk2
+endif
+
 optee-os: optee-os-common
 
 optee-os-clean: optee-os-clean-common
