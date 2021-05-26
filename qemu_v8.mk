@@ -75,7 +75,8 @@ TF_A_FLAGS ?= \
 	DEBUG=$(TF_A_DEBUG) \
 	LOG_LEVEL=$(TF_A_LOGLVL) \
 	V=1 \
-	ARM_BL31_IN_DRAM=1 ENABLE_SPMD=1 SPM_DEPRECATED=0
+	ARM_BL31_IN_DRAM=1 \
+	SPD=spmd CTX_INCLUDE_EL2_REGS=0 SPMD_SPM_AT_SEL2=0 SPMC_OPTEE=1
 
 ifeq ($(TF_A_TRUSTED_BOARD_BOOT),y)
 TF_A_FLAGS += \
@@ -84,10 +85,8 @@ TF_A_FLAGS += \
 	GENERATE_COT=1
 endif
 
-arm-tf: optee-os #edk2
+arm-tf: optee-os edk2
 	mkdir -p $(ARM_TF_OUT)/
-#	dtc -I dts -O dtb < ../optee_os/out/arm/core/rd.dts > \
-#		$(ARM_TF_OUT)/tos_fw_config.dtb
 	$(TF_A_EXPORTS) $(MAKE) -C $(TF_A_PATH) $(TF_A_FLAGS) all fip
 	mkdir -p $(BINARIES_PATH)
 	ln -sf $(TF_A_OUT)/bl1.bin $(BINARIES_PATH)
@@ -106,8 +105,6 @@ endif
 	ln -sf $(OPTEE_OS_HEADER_V2_BIN) $(BINARIES_PATH)/bl32.bin
 	ln -sf $(OPTEE_OS_PAGER_V2_BIN) $(BINARIES_PATH)/bl32_extra1.bin
 	ln -sf $(OPTEE_OS_PAGEABLE_V2_BIN) $(BINARIES_PATH)/bl32_extra2.bin
-	ln -sf $(TF_A_OUT)/fdts/qemu_spmc_manifest.dtb \
-		$(BINARIES_PATH)/tos_fw_config.dtb
 	ln -sf $(EDK2_BIN) $(BINARIES_PATH)/bl33.bin
 
 arm-tf-clean:
@@ -198,7 +195,7 @@ soc-term-clean:
 run: all
 	$(MAKE) run-only
 
-QEMU_SMP ?= 1
+QEMU_SMP ?= 2
 
 .PHONY: run-only
 run-only:
