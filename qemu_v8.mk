@@ -147,7 +147,6 @@ include toolchain.mk
 TF_A_EXPORTS ?= \
 	CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
 
-#TF_A_LOGLVL = 50
 TF_A_DEBUG ?= $(DEBUG)
 ifeq ($(TF_A_DEBUG),0)
 TF_A_LOGLVL ?= 30
@@ -445,7 +444,6 @@ else
 QEMU_MTE	= off
 endif
 
-
 .PHONY: run-only
 run-only:
 	ln -sf $(ROOT)/out-br/images/rootfs.cpio.gz $(BINARIES_PATH)/
@@ -465,7 +463,7 @@ run-only:
 		-bios bl1.bin		\
 		-initrd rootfs.cpio.gz \
 		-kernel Image -no-acpi \
-		-append 'console=ttyAMA0,38400 keep_bootcon root=/dev/vda2 nokaslr $(QEMU_KERNEL_BOOTARGS)' \
+		-append 'console=ttyAMA0,38400 keep_bootcon root=/dev/vda2 $(QEMU_KERNEL_BOOTARGS)' \
 		$(QEMU_XEN) \
 		$(QEMU_EXTRA_ARGS)
 
