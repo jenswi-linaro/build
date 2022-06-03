@@ -99,7 +99,11 @@ BL33_DEPS		?= edk2
 endif
 
 XEN_PATH		?= $(ROOT)/xen
+ifeq ($(XEN_DEV),y)
+XEN_IMAGE		?= $(XEN_PATH)/xen/xen.efi
+else
 XEN_IMAGE		?= $(ROOT)/out-br/build/xen-4.14.5/xen/xen.efi
+endif
 XEN_EXT4		?= $(BINARIES_PATH)/xen.ext4
 XEN_CFG			?= $(ROOT)/build/qemu_v8/xen/xen.cfg
 
@@ -391,6 +395,30 @@ $(ROOTFS_UGZ): u-boot buildroot | $(BINARIES_PATH)
 # XEN
 ################################################################################
 
+ifeq ($(XEN_DEV),y)
+XEN_CONFIGS = .config $(ROOT)/build/kconfigs/xen.conf
+ifneq ($(filter 1 2 3,$(SPMC_AT_EL)),)
+XEN_CONFIGS += $(ROOT)/build/kconfigs/xen_ffa.conf
+XEN_FFA = $(XEN_BOOT)
+else
+XEN_FFA = n
+endif
+
+$(XEN_PATH)/xen/.config:
+	$(MAKE) -C $(XEN_PATH)/xen XEN_TARGET_ARCH=arm64 defconfig
+	cd $(XEN_PATH)/xen && \
+	tools/kconfig/merge_config.sh -m $(XEN_CONFIGS)
+
+xen-menuconfig:
+	$(MAKE) -C $(XEN_PATH)/xen XEN_TARGET_ARCH=arm64 menuconfig
+
+xen: $(XEN_PATH)/xen/.config
+	$(MAKE) -C $(XEN_PATH) dist-xen \
+	XEN_TARGET_ARCH=arm64 \
+	CONFIG_XEN_INSTALL_SUFFIX=.gz	\
+	CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
+endif
+
 XEN_TMP ?= $(BINARIES_PATH)/xen_files
 
 $(XEN_TMP):
@@ -486,6 +514,7 @@ check: $(CHECK_DEPS)
 		export QEMU_MEM=$(QEMU_MEM) && \
 		export QEMU_CPU=$(QEMU_CPU) && \
 		export XEN_BOOT=$(XEN_BOOT) && \
+		export XEN_FFA=$(XEN_FFA) && \
 		expect $(ROOT)/build/qemu-check.exp -- $(check-args) || \
 		(if [ "$(DUMP_LOGS_ON_ERROR)" ]; then \
 			echo "== $$PWD/serial0.log:"; \
