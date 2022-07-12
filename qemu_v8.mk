@@ -1,3 +1,5 @@
+HANDOFF = y
+UBOOT = y
 ################################################################################
 # Following variables defines how the NS_USER (Non Secure User - Client
 # Application), NS_KERNEL (Non Secure Kernel), S_KERNEL (Secure Kernel) and
@@ -147,7 +149,7 @@ include toolchain.mk
 TF_A_EXPORTS ?= \
 	CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
 
-TF_A_DEBUG ?= $(DEBUG)
+TF_A_DEBUG ?= 1
 ifeq ($(TF_A_DEBUG),0)
 TF_A_LOGLVL ?= 30
 TF_A_OUT = $(TF_A_PATH)/build/qemu/release
@@ -191,6 +193,10 @@ TF_A_FLAGS += CTX_INCLUDE_PAUTH_REGS=1
 endif
 ifeq ($(MEMTAG),y)
 TF_A_FLAGS += CTX_INCLUDE_MTE_REGS=1
+endif
+
+ifeq ($(HANDOFF),y)
+TF_A_FLAGS += HANDOFF=1
 endif
 
 arm-tf: optee-os $(BL33_DEPS)
