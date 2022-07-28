@@ -1,3 +1,7 @@
+XEN_DEV=y
+XEN_BOOT=y
+SPMC_AT_EL=1
+
 ################################################################################
 # Following variables defines how the NS_USER (Non Secure User - Client
 # Application), NS_KERNEL (Non Secure Kernel), S_KERNEL (Secure Kernel) and
