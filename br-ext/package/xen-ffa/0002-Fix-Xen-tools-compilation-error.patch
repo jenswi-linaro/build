@@ -1,0 +1,30 @@
+From e9f7c94f3416deec13599c534a69f0c9da0e4763 Mon Sep 17 00:00:00 2001
+Message-Id: <e9f7c94f3416deec13599c534a69f0c9da0e4763.1674833675.git.bertrand.marquis@arm.com>
+From: Bertrand Marquis <bertrand.marquis@arm.com>
+Date: Fri, 27 Jan 2023 15:33:57 +0000
+Subject: [PATCH] Fix Xen tools compilation error
+
+ENODEV is not defined while compiling tools.
+TO BE INVESTIGATED.
+
+Signed-off-by: Bertrand Marquis <bertrand.marquis@arm.com>
+---
+ xen/arch/arm/include/asm/ffa.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/xen/arch/arm/include/asm/ffa.h b/xen/arch/arm/include/asm/ffa.h
+index b2ab12496a51..1ec231d1d27f 100644
+--- a/xen/arch/arm/include/asm/ffa.h
++++ b/xen/arch/arm/include/asm/ffa.h
+@@ -62,7 +62,7 @@ static inline uint32_t ffa_get_call_count(void)
+ 
+ static inline int ffa_domain_init(struct domain *d, bool ffa_enabled)
+ {
+-    return -ENODEV;
++    return -1;
+ }
+ 
+ static inline void ffa_domain_destroy(struct domain *d)
+-- 
+2.25.1
+

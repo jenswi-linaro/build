@@ -102,7 +102,7 @@ XEN_PATH		?= $(ROOT)/xen
 ifeq ($(XEN_DEV),y)
 XEN_IMAGE		?= $(XEN_PATH)/xen/xen.efi
 else
-XEN_IMAGE		?= $(ROOT)/out-br/build/xen-4.14.5/xen/xen.efi
+XEN_IMAGE		?= $(ROOT)/out-br/build/xen-ffa-xen_ffa-v6/xen/xen.efi
 endif
 XEN_EXT4		?= $(BINARIES_PATH)/xen.ext4
 XEN_CFG			?= $(ROOT)/build/qemu_v8/xen/xen.cfg
