@@ -5,7 +5,7 @@
 ################################################################################
 
 XEN_EXT_VERSION = ffa
-XEN_EXT_SITE = $(BR2_PACKAGE_XEN_EXT_SITE)
+XEN_EXT_SITE = $(if $(BR2_PACKAGE_XEN_EXT_SITE),$(BR2_PACKAGE_XEN_EXT_SITE),"")
 XEN_EXT_SITE_METHOD = local
 XEN_EXT_LICENSE = GPL-2.0
 XEN_EXT_LICENSE_FILES = COPYING
