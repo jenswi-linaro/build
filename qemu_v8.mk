@@ -417,6 +417,8 @@ xen: $(XEN_PATH)/xen/.config
 	XEN_TARGET_ARCH=arm64 \
 	CONFIG_XEN_INSTALL_SUFFIX=.gz	\
 	CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
+
+xen-create-image: xen
 endif
 
 XEN_TMP ?= $(BINARIES_PATH)/xen_files
