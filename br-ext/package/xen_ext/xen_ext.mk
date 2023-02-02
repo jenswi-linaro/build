@@ -4,17 +4,14 @@
 #
 ################################################################################
 
-XEN_EXT_VERSION = xen_ffa-v6
-XEN_EXT_SITE = https://github.com/jenswi-linaro/xen.git
-XEN_EXT_SITE_METHOD = git
+XEN_EXT_VERSION = ffa
+XEN_EXT_SITE = $(BR2_PACKAGE_XEN_EXT_SITE)
+XEN_EXT_SITE_METHOD = local
 XEN_EXT_LICENSE = GPL-2.0
 XEN_EXT_LICENSE_FILES = COPYING
 XEN_EXT_CPE_ID_VENDOR = xen
 XEN_EXT_CPE_ID_PREFIX = cpe:2.3:o
 XEN_EXT_DEPENDENCIES = host-acpica host-python3 host-meson host-pkgconf libglib2 zlib pixman
-
-#Disable hash check
-BR_NO_CHECK_HASH_FOR += $(XEN_EXT_SOURCE)
 
 # Calculate XEN_EXT_ARCH
 ifeq ($(ARCH),aarch64)

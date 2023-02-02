@@ -10,6 +10,12 @@ config BR2_PACKAGE_XEN_EXT
 
 if BR2_PACKAGE_XEN_EXT
 
+config BR2_PACKAGE_XEN_EXT_SITE
+	string "Xen source path"
+	default ""
+	help
+	  The path to the source directory of Xen
+
 config BR2_PACKAGE_XEN_EXT_HYPERVISOR
 	bool "Xen hypervisor"
 	help
