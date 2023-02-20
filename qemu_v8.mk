@@ -411,7 +411,7 @@ endif
 $(XEN_PATH)/xen/.config:
 	$(MAKE) -C $(XEN_PATH)/xen XEN_TARGET_ARCH=arm64 defconfig
 	cd $(XEN_PATH)/xen && \
-	tools/kconfig/merge_config.sh -m $(XEN_CONFIGS)
+	env XEN_TARGET_ARCH=arm64 tools/kconfig/merge_config.sh $(XEN_CONFIGS)
 
 xen-menuconfig:
 	$(MAKE) -C $(XEN_PATH)/xen XEN_TARGET_ARCH=arm64 menuconfig
