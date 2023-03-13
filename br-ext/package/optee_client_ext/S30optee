@@ -28,6 +28,17 @@ start() {
 		echo "FAIL"
 		return "$status"
 	fi
+	if [ -e /dev/tpm0 ]; then
+		printf 'Set permissions on %s: ' "/dev/tpm0"
+		chown root:tee /dev/tpm0 && chmod 0660 /dev/tpm0
+		status=$?
+		if [ "$status" -eq 0 ]; then
+			echo "OK"
+		else
+			echo "FAIL"
+			return "$status"
+		fi
+	fi
 	printf 'Starting %s: ' "$DAEMON"
 	start-stop-daemon -S -q -p "$PIDFILE" -c tee -x "$DAEMON_PATH/$DAEMON" \
 		-- $DAEMON_ARGS
