@@ -1,3 +1,7 @@
+BR2_PACKAGE_TPM2_TOOLS=y
+override WITH_CXX_TESTS=n
+export WITH_CXX_TESTS
+
 ################################################################################
 # Following variables defines how the NS_USER (Non Secure User - Client
 # Application), NS_KERNEL (Non Secure Kernel), S_KERNEL (Secure Kernel) and
@@ -61,6 +65,7 @@ MEMTAG ?= n
 ################################################################################
 TF_A_PATH		?= $(ROOT)/trusted-firmware-a
 BINARIES_PATH		?= $(ROOT)/out/bin
+SWTPM0_PATH		?= /tmp/swtpm0
 EDK2_PATH		?= $(ROOT)/edk2
 EDK2_TOOLCHAIN		?= GCC5
 EDK2_ARCH		?= AARCH64
@@ -417,11 +422,24 @@ QEMU_MEM 	?= 1057
 QEMU_VIRT	= false
 endif
 
+
+QEMU_TPM	= -chardev \
+		  socket,id=chrtpm,path=$(SWTPM0_PATH)/swtpm-sock \
+		 -tpmdev emulator,id=tpm0,chardev=chrtpm \
+		 -device tpm-tis-device,tpmdev=tpm0
+
 ifeq ($(MEMTAG),y)
 QEMU_MTE	= on
 else
 QEMU_MTE	= off
 endif
+
+.PHONY: run-swtpm
+run-swtpm:
+	mkdir -p $(SWTPM0_PATH)
+	swtpm socket --tpmstate dir=$(SWTPM0_PATH) \
+		--ctrl type=unixio,path=$(SWTPM0_PATH)/swtpm-sock \
+		--log level=40 --tpm2 -t #-d
 
 .PHONY: run-only
 run-only:
@@ -444,6 +462,7 @@ run-only:
 		-kernel Image -no-acpi \
 		-append 'console=ttyAMA0,38400 keep_bootcon root=/dev/vda2 $(QEMU_KERNEL_BOOTARGS)' \
 		$(QEMU_XEN) \
+		$(QEMU_TPM) \
 		$(QEMU_EXTRA_ARGS)
 
 ifneq ($(filter check check-rust,$(MAKECMDGOALS)),)
