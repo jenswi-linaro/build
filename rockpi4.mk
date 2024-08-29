@@ -158,6 +158,7 @@ linux-cleaner: linux-cleaner-common
 ################################################################################
 OPTEE_OS_PLATFORM = rockchip-rk3399
 OPTEE_OS_COMMON_FLAGS += CFG_ENABLE_EMBEDDED_TESTS=y
+OPTEE_OS_COMMON_FLAGS += CFG_DRAM_BASE=0x200000 CFG_DRAM_SIZE=0xf7e00000
 
 .PHONY: optee-os
 optee-os: optee-os-common
