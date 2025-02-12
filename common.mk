@@ -339,6 +339,7 @@ y-or-n = $(or $(call streq,y,$(1)),$(call streq,n,$(1)))
 append-var_ = echo '$(1)=$(3)'$($(1))'$(3)' >>$(2);
 append-var = $(call append-var_,$(1),$(2),$(if $(call y-or-n,$($(1))),,$(double-quote)))
 append-br2-vars = $(foreach var,$(filter BR2_%,$(.VARIABLES)),$(call append-var,$(var),$(1)))
+append-assignments = $(foreach var,$(1),echo '$(var)' >>$(2);)
 
 ifneq (y,$(BR2_PER_PACKAGE_DIRECTORIES))
 br-make-flags := -j1
@@ -348,6 +349,8 @@ endif
 buildroot: optee-os
 	@mkdir -p ../out-br
 	@rm -f ../out-br/build/optee_*/.stamp_*
+	@rm -f ../out-br/local.mk
+	$(call append-assignments,$(BR_LOCAL_MK_OVERRIDES),../out-br/local.mk)
 	@rm -f ../out-br/extra.conf
 	@$(call append-br2-vars,../out-br/extra.conf)
 	@(cd .. && $(PYTHON3) build/br-ext/scripts/make_def_config.py \
