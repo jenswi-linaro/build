@@ -60,7 +60,9 @@ include toolchain.mk
 # Arm Trusted Firmware-A
 ################################################################################
 TF_A_EXPORTS ?= CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)" \
-		M0_CROSS_COMPILE="$(CCACHE)$(AARCH32_CROSS_COMPILE)"
+		CC="$(CCACHE)$(AARCH64_CROSS_COMPILE)gcc" \
+		LD="$(CCACHE)$(AARCH64_CROSS_COMPILE)ld" \
+		M0_CROSS_COMPILE="$(AARCH32_CROSS_COMPILE)"
 
 TF_A_DEBUG ?= $(DEBUG)
 ifeq ($(TF_A_DEBUG),0)
