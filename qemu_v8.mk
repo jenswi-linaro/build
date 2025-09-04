@@ -1,3 +1,7 @@
+SPMC_AT_EL=1
+QEMU_SMP=1
+MEASURED_BOOT_FTPM=n
+RUST_ENABLE=n
 ################################################################################
 # Following variables defines how the NS_USER (Non Secure User - Client
 # Application), NS_KERNEL (Non Secure Kernel), S_KERNEL (Secure Kernel) and
